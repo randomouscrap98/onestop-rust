@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 license = "MIT"
 description = "Time code and aggregate across multiple contexts/threads. Other things too?"
-repository = ""
+repository = "https://github.com/randomouscrap98/onestop-rust"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
