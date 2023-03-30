@@ -1,7 +1,7 @@
 use std::sync::{Mutex, Arc};
 use std::time::{Instant, Duration};
 
-#[cfg(feature = "util")]
+#[cfg(feature = "utils")]
 pub mod utils;
 
 /// Shortcut for timing a section of code and adding it to the given ['OneList<OneDuration>']

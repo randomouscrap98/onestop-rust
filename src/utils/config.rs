@@ -2,6 +2,7 @@
 /// In doing so, you can call ".apply_optional()" on the real config to bring in the
 /// "optionally set" values from the other config. This is all wrapped up if you
 /// just read a chain from the filesystem (you provide the chain to .read_chain())
+#[macro_export]
 macro_rules! create_config {
     ($configname:ident, $optconfigname:ident => {
         $($name:ident : $type:ty, )*
@@ -14,7 +15,7 @@ macro_rules! create_config {
         }
 
         //The "optional" config, this is used internally
-        #[derive(serde::Deserialize, Clone, Debug)]
+        #[derive(serde::Deserialize, Clone, Default, Debug)]
         struct $optconfigname
         {
             $(
@@ -64,21 +65,32 @@ macro_rules! create_config {
                 result
             }
             /// The basic case of "I just want to load settings for the given environment". If you give
-            /// (settings, Dev), it will read from the chain "settings.json, settings.Dev.json"
+            /// (settings, Dev), it will read from the chain "./settings.toml, ./settings.Dev.toml"
+            #[allow(dead_code)]
             pub fn read_with_environment_toml(basename: &str, env: Option<&str>) -> Self {
-                let mut chain = vec![ format!("./{}.toml", basename) ];
+                Self::read_with_environment_toml_dir(".", basename, env)
+            }
+            /// Basic read settings from environment within the given directory. If you pass in
+            /// ("configs", "settings", "Dev") it will read from the chain "configs/settings.toml, configs/settings.Dev.toml"
+            pub fn read_with_environment_toml_dir(dir: &str, basename: &str, env: Option<&str>) -> Self {
+                let real_dir = if dir.is_empty() { "." } else { dir };
+                let mut chain = vec![ format!("{}/{}.toml", real_dir, basename) ];
                 if let Some(env) = env {
-                    chain.push(format!("./{}.{}.toml", basename, env));
+                    chain.push(format!("{}/{}.{}.toml", real_dir, basename, env));
                 }
                 Self::read_chain_toml(chain)
             }
         }
     };
 }
-pub(crate) use create_config;
+//pub(crate) use create_config;
 
+#[cfg(test)]
 mod tests {
-    use super::*;
+    //use super::*;
+
+    const SETTINGSDIR : &str = "./testfiles/config";
+    const SETTINGSBASE : &str = "settings.toml";
 
     create_config!{
         Config, OptConfig => {
@@ -89,8 +101,69 @@ mod tests {
     }
 
     #[test]
+    fn test_config()
+    {
+        let conf = Config::default();
+        assert_eq!(conf.some_string, String::default());
+        assert_eq!(conf.some_int, i32::default());
+        assert_eq!(conf.some_vec, Vec::<String>::default());
+    }
+
+    #[test]
     fn test_optconfig()
     {
         let conf = OptConfig::default();
+        assert_eq!(conf.some_string, None);
+        assert_eq!(conf.some_int, None);
+        assert_eq!(conf.some_vec, None);
+    }
+
+    #[test]
+    fn test_readchaintoml_empty()
+    {
+        let conf = Config::read_chain_toml(Vec::new());
+        assert_eq!(conf.some_string, String::default());
+        assert_eq!(conf.some_int, i32::default());
+        assert_eq!(conf.some_vec, Vec::<String>::default());
+    }
+
+    #[test]
+    fn test_readchaintoml_single()
+    {
+        let conf = Config::read_chain_toml(vec![format!("{}/{}", SETTINGSDIR, SETTINGSBASE)]);
+        assert_eq!(conf.some_string, String::from("Hecking wow"));
+        assert_eq!(conf.some_int, 32);
+        assert_eq!(conf.some_vec, vec![String::from("Ab"), String::from("Ced")]);
+    }
+
+    #[test]
+    fn test_readchaintoml_all()
+    {
+        let conf = Config::read_chain_toml(vec![
+            format!("{}/{}", SETTINGSDIR, SETTINGSBASE),
+            format!("{}/{}", SETTINGSDIR, "settings.Debug.toml"),
+            format!("{}/{}", SETTINGSDIR, "settings.Production.toml"),
+        ]);
+        assert_eq!(conf.some_string, String::from("Another thing"));
+        assert_eq!(conf.some_int, 44);
+        assert_eq!(conf.some_vec, vec![String::from("Just one")]);
+    }
+    
+    #[test]
+    fn test_readwithenvironmenttoml_debug()
+    {
+        let conf = Config::read_with_environment_toml_dir(SETTINGSDIR, "settings", Some("Debug"));
+        assert_eq!(conf.some_string, String::from("Hecking wow"));
+        assert_eq!(conf.some_int, 44);
+        assert_eq!(conf.some_vec, vec![String::from("Just one")]);
+    }
+
+    #[test]
+    fn test_readwithenvironmenttoml_production()
+    {
+        let conf = Config::read_with_environment_toml_dir(SETTINGSDIR, "settings", Some("Production"));
+        assert_eq!(conf.some_string, String::from("Another thing"));
+        assert_eq!(conf.some_int, 32);
+        assert_eq!(conf.some_vec, vec![String::from("Ab"), String::from("Ced")]);
     }
 }
